@@ -33,8 +33,26 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:col.text", SConfigValue{.intValue = configStringToInt("rgba(ffffffff)")});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:bar_text_size", SConfigValue{.intValue = 10});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:bar_text_font", SConfigValue{.strValue = "Sans"});
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close", SConfigValue{.intValue = configStringToInt("rgba(cc0000cc)")});
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize", SConfigValue{.intValue = configStringToInt("rgba(ffff33cc)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:bar_text_shadow", SConfigValue{.intValue = 1});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:col.text_shadow", SConfigValue{.intValue = configStringToInt("rgba(00000066)")});
+
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close_bg", SConfigValue{.intValue = configStringToInt("rgba(cc0000cc)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close_fg", SConfigValue{.intValue = configStringToInt("rgba(ffffff80)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close_fg_hover", SConfigValue{.intValue = configStringToInt("rgba(ffffffff)")});
+
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize_bg", SConfigValue{.intValue = configStringToInt("rgba(ffff33cc)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize_fg", SConfigValue{.intValue = configStringToInt("rgba(ffffff80)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize_fg_hover", SConfigValue{.intValue = configStringToInt("rgba(ffffffff)")});
+
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.float_bg", SConfigValue{.intValue = configStringToInt("rgba(0000ffff)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.float_fg", SConfigValue{.intValue = configStringToInt("rgba(ffffff46)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.float_fg_hover", SConfigValue{.intValue = configStringToInt("rgba(ffffffff)")});
+
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.movetospecialworkspace_bg", SConfigValue{.intValue = configStringToInt("rgba(ffff00ff)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.movetospecialworkspace_fg", SConfigValue{.intValue = configStringToInt("rgba(ffffff46)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.movetospecialworkspace_fg_hover", SConfigValue{.intValue = configStringToInt("rgba(ffffffff)")});
+
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.text", SConfigValue{.intValue = configStringToInt("rgba(ffffffb3)")});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprbars:buttons:button_size", SConfigValue{.intValue = 10});
 
     // add deco to existing windows

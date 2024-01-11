@@ -7,7 +7,8 @@
 #include "globals.hpp"
 
 constexpr int BAR_PADDING = 10;
-constexpr int BUTTONS_PAD = 5;
+constexpr int BUTTONS_PAD = 0;
+constexpr int BUTTON_SYMBOL_LINE_WIDTH = 0;
 
 CHyprBar::CHyprBar(CWindow* pWindow) : IHyprWindowDecoration(pWindow) {
     m_pWindow         = pWindow;
@@ -89,10 +90,25 @@ void CHyprBar::onMouseDown(wlr_pointer_button_event* e) {
         return;
     }
 
+    currentPos.x -= BUTTONS_PAD + *PBUTTONSIZE;
+    if (VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + *PBUTTONSIZE + BUTTONS_PAD, currentPos.y + *PBUTTONSIZE)) {
+        // hit on float
+        g_pKeybindManager->m_mDispatchers["togglefloating"]("1");
+        return;
+    }
+
+    currentPos.x -= BUTTONS_PAD + *PBUTTONSIZE;
+    if (VECINRECT(COORDS, currentPos.x, currentPos.y, currentPos.x + *PBUTTONSIZE + BUTTONS_PAD, currentPos.y + *PBUTTONSIZE)) {
+        // hit on special workspace
+        g_pKeybindManager->m_mDispatchers["movetoworkspacesilent"]("special");
+        return;
+    }
+
     m_bDragPending = true;
 }
 
 void CHyprBar::onMouseMove(Vector2D coords) {
+    damageEntire();
     if (m_bDragPending) {
         m_bDragPending = false;
         g_pKeybindManager->m_mDispatchers["mouse"]("1movewindow");
@@ -105,11 +121,13 @@ void CHyprBar::onMouseMove(Vector2D coords) {
 }
 
 void CHyprBar::renderBarTitle(const Vector2D& bufferSize, const float scale) {
-    static auto* const PCOLOR      = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:col.text")->intValue;
-    static auto* const PSIZE       = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:bar_text_size")->intValue;
-    static auto* const PFONT       = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:bar_text_font")->strValue;
-    static auto* const PBUTTONSIZE = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:button_size")->intValue;
-    static auto* const PBORDERSIZE = &HyprlandAPI::getConfigValue(PHANDLE, "general:border_size")->intValue;
+    static auto* const PCOLOR       = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:col.text")->intValue;
+    static auto* const PSHADOWCOLOR = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:col.text_shadow")->intValue;
+    static auto* const PSIZE        = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:bar_text_size")->intValue;
+    static auto* const PFONT        = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:bar_text_font")->strValue;
+    static auto* const PSHADOW      = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:bar_text_shadow")->intValue;
+    static auto* const PBUTTONSIZE  = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:button_size")->intValue;
+    static auto* const PBORDERSIZE  = &HyprlandAPI::getConfigValue(PHANDLE, "general:border_size")->intValue;
 
     const auto         scaledSize       = *PSIZE * scale;
     const auto         scaledButtonSize = *PBUTTONSIZE * scale;
@@ -117,7 +135,8 @@ void CHyprBar::renderBarTitle(const Vector2D& bufferSize, const float scale) {
     const auto         scaledButtonsPad = BUTTONS_PAD * scale;
     const auto         scaledBarPadding = BAR_PADDING * scale;
 
-    const CColor       COLOR = *PCOLOR;
+    const CColor       COLOR        = *PCOLOR;
+    const CColor       SHADOWCOLOR  = *PSHADOWCOLOR;
 
     const auto         CAIROSURFACE = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, bufferSize.x, bufferSize.y);
     const auto         CAIRO        = cairo_create(CAIROSURFACE);
@@ -138,21 +157,28 @@ void CHyprBar::renderBarTitle(const Vector2D& bufferSize, const float scale) {
     pango_font_description_free(fontDesc);
 
     const int leftPadding  = scaledBorderSize + scaledBarPadding;
-    const int rightPadding = (scaledButtonSize * 2) + (scaledButtonsPad * 3) + scaledBorderSize + scaledBarPadding;
+    const int rightPadding = (scaledButtonSize * 4) + (scaledButtonsPad * 4) + scaledBorderSize + scaledBarPadding;
     const int maxWidth     = bufferSize.x - leftPadding - rightPadding;
 
     pango_layout_set_width(layout, maxWidth * PANGO_SCALE);
     pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
 
-    cairo_set_source_rgba(CAIRO, COLOR.r, COLOR.g, COLOR.b, COLOR.a);
 
     int layoutWidth, layoutHeight;
     pango_layout_get_size(layout, &layoutWidth, &layoutHeight);
     const int xOffset = std::round(((bufferSize.x - scaledBorderSize) / 2.0 - layoutWidth / PANGO_SCALE / 2.0));
     const int yOffset = std::round((bufferSize.y / 2.0 - layoutHeight / PANGO_SCALE / 2.0));
 
+    if(PSHADOW) {
+        cairo_set_source_rgba(CAIRO, SHADOWCOLOR.r, SHADOWCOLOR.g, SHADOWCOLOR.b, SHADOWCOLOR.a);
+        cairo_move_to(CAIRO, xOffset + 1, yOffset + 1);
+        pango_cairo_show_layout(CAIRO, layout);
+    }
+
+    cairo_set_source_rgba(CAIRO, COLOR.r, COLOR.g, COLOR.b, COLOR.a);
     cairo_move_to(CAIRO, xOffset, yOffset);
     pango_cairo_show_layout(CAIRO, layout);
+
 
     g_object_unref(layout);
 
@@ -177,13 +203,241 @@ void CHyprBar::renderBarTitle(const Vector2D& bufferSize, const float scale) {
     cairo_surface_destroy(CAIROSURFACE);
 }
 
+void CHyprBar::drawCloseButton(cairo_t* CAIRO, const Vector2D &pos, int scaledButtonSize, const Vector2D &COORDS) {
+    static auto* const PCLOSECOLOR          = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close_bg")->intValue;
+    static auto* const PCLOSECOLORFG        = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close_fg")->intValue;
+    static auto* const PCLOSECOLORFGHOVER   = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close_fg_hover")->intValue;
+    static auto* const ROUNDING             = &HyprlandAPI::getConfigValue(PHANDLE, "decoration:rounding")->intValue;
+
+    const CColor& col           = CColor(*PCLOSECOLOR);
+    const CColor& col_fg        = CColor(*PCLOSECOLORFG);
+    const CColor& col_fg_hover  = CColor(*PCLOSECOLORFGHOVER);
+
+
+    const int X = pos.x;
+    const int Y = pos.y;
+    const int width = scaledButtonSize;
+    const int height = scaledButtonSize;
+    const int corner_radius = *ROUNDING; // Adjust the radius as needed
+
+    bool hovering = VECINRECT(COORDS, pos.x, pos.y, pos.x + scaledButtonSize + BUTTONS_PAD, pos.y + scaledButtonSize);
+
+    cairo_set_source_rgba(CAIRO, col.r, col.g, col.b, (hovering) ? col.a : 0);
+
+    cairo_new_sub_path(CAIRO);
+    cairo_arc(CAIRO, X + width - corner_radius, Y + corner_radius, corner_radius, -M_PI_2, 0); // Top-right corner
+    cairo_line_to(CAIRO, X + width, Y + height);
+    cairo_line_to(CAIRO, X, Y + height);
+    cairo_line_to(CAIRO, X, Y);
+    cairo_close_path(CAIRO);
+
+    cairo_fill(CAIRO);
+
+    // Draw the X
+
+    float scale_factor = 0.35;
+    int scaledX = X + (width - width * scale_factor) / 2;
+    int scaledY = Y + (height - height * scale_factor) / 2;
+    int scaledWidth = width * scale_factor;
+    int scaledHeight = height * scale_factor;
+    double line_width = 1.4;
+
+    cairo_set_antialias(CAIRO, CAIRO_ANTIALIAS_BEST);
+
+    // Shadow underneath
+    if(hovering)
+    {
+        cairo_set_source_rgba(CAIRO, 0, 0, 0, 0.3);
+        cairo_set_line_width(CAIRO, line_width);
+
+        cairo_move_to(CAIRO, scaledX + 1, scaledY + 1);
+        cairo_line_to(CAIRO, scaledX + scaledWidth + 1, scaledY + scaledHeight + 1);
+
+        cairo_move_to(CAIRO, scaledX + scaledWidth + 1, scaledY + 1);
+        cairo_line_to(CAIRO, scaledX + 1, scaledY + scaledHeight + 1);
+
+        cairo_stroke(CAIRO);
+    }
+
+    if(hovering)
+        cairo_set_source_rgba(CAIRO, col_fg_hover.r, col_fg_hover.g, col_fg_hover.b, col_fg_hover.a);
+    else
+        cairo_set_source_rgba(CAIRO, col_fg.r, col_fg.g, col_fg.b, col_fg.a);
+
+    cairo_set_line_width(CAIRO, line_width);
+
+    cairo_move_to(CAIRO, scaledX, scaledY);
+    cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY + scaledHeight);
+
+    cairo_move_to(CAIRO, scaledX + scaledWidth, scaledY);
+    cairo_line_to(CAIRO, scaledX, scaledY + scaledHeight);
+
+    cairo_stroke(CAIRO); // Stroke the lines with the specified color and line width
+}
+
+void CHyprBar::drawMaximizeButton(cairo_t* CAIRO, const Vector2D &pos, int scaledButtonSize, const Vector2D &COORDS) {
+    static auto* const PMAXCOLOR            = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize_bg")->intValue;
+    static auto* const PMAXCOLORFG          = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize_fg")->intValue;
+    static auto* const PMAXCOLORFGHOVER     = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize_fg_hover")->intValue;
+
+    const CColor& col           = CColor(*PMAXCOLOR);
+    const CColor& col_fg        = CColor(*PMAXCOLORFG);
+    const CColor& col_fg_hover  = CColor(*PMAXCOLORFGHOVER);
+
+    const int X = pos.x;
+    const int Y = pos.y;
+    const int width = scaledButtonSize;
+    const int height = scaledButtonSize;
+
+    bool hovering = VECINRECT(COORDS, pos.x, pos.y, pos.x + scaledButtonSize + BUTTONS_PAD, pos.y + scaledButtonSize);
+
+    cairo_set_source_rgba(CAIRO, col.r, col.g, col.b, (hovering) ? col.a : 0);
+
+    cairo_new_sub_path(CAIRO);
+    cairo_move_to(CAIRO, X, Y);
+    cairo_line_to(CAIRO, X + width, Y);
+    cairo_line_to(CAIRO, X + width, Y + height);
+    cairo_line_to(CAIRO, X, Y + height);
+    cairo_line_to(CAIRO, X, Y);
+    cairo_close_path(CAIRO);
+
+    cairo_fill(CAIRO);
+
+    float scale_factor = 0.35;
+    int scaledX = X + (width - width * scale_factor) / 2;
+    int scaledY = Y + (height - height * scale_factor) / 2;
+    int scaledWidth = width * scale_factor;
+    int scaledHeight = height * scale_factor;
+    double line_width = 1;
+
+    cairo_set_antialias(CAIRO, CAIRO_ANTIALIAS_NONE);
+
+    // Shadow underneath
+    if(hovering)
+    {
+        cairo_set_source_rgba(CAIRO, 0, 0, 0, 0.3);
+        cairo_set_line_width(CAIRO, line_width);
+
+        cairo_move_to(CAIRO, scaledX, scaledY);
+        cairo_line_to(CAIRO, scaledX + scaledWidth + 1, scaledY + 1);
+        cairo_line_to(CAIRO, scaledX + scaledWidth + 1, scaledY + scaledHeight + 1);
+        cairo_line_to(CAIRO, scaledX + 1, scaledY + scaledHeight + 1);
+        cairo_line_to(CAIRO, scaledX + 1, scaledY + 1);
+        cairo_close_path(CAIRO);
+
+        cairo_stroke(CAIRO);
+    }
+
+    if(hovering)
+        cairo_set_source_rgba(CAIRO, col_fg_hover.r, col_fg_hover.g, col_fg_hover.b, col_fg_hover.a);
+    else
+        cairo_set_source_rgba(CAIRO, col_fg.r, col_fg.g, col_fg.b, col_fg.a);
+
+    cairo_set_line_width(CAIRO, line_width);
+
+    cairo_move_to(CAIRO, scaledX, scaledY);
+    cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY);
+    cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY + scaledHeight);
+    cairo_line_to(CAIRO, scaledX, scaledY + scaledHeight);
+    cairo_line_to(CAIRO, scaledX, scaledY);
+    cairo_close_path(CAIRO);
+
+
+    cairo_stroke(CAIRO); // Stroke the lines with the specified color and line width
+}
+
+void CHyprBar::drawFloatButton(cairo_t* CAIRO, const Vector2D &pos, int scaledButtonSize, const Vector2D &COORDS) {
+    static auto* const PFLOATCOLOR            = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.float_bg")->intValue;
+    static auto* const PFLOATCOLORFG          = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.float_fg")->intValue;
+    static auto* const PFLOATCOLORFGHOVER     = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.float_fg_hover")->intValue;
+
+    const CColor& col           = CColor(*PFLOATCOLOR);
+    const CColor& col_fg        = CColor(*PFLOATCOLORFG);
+    const CColor& col_fg_hover  = CColor(*PFLOATCOLORFGHOVER);
+
+    const int X = pos.x;
+    const int Y = pos.y;
+    const int width = scaledButtonSize;
+    const int height = scaledButtonSize;
+
+    bool hovering = VECINRECT(COORDS, pos.x, pos.y, pos.x + scaledButtonSize + BUTTONS_PAD, pos.y + scaledButtonSize);
+
+    cairo_set_source_rgba(CAIRO, col.r, col.g, col.b, (hovering) ? col.a : 0);
+
+    cairo_new_sub_path(CAIRO);
+    cairo_move_to(CAIRO, X, Y);
+    cairo_line_to(CAIRO, X + width, Y);
+    cairo_line_to(CAIRO, X + width, Y + height);
+    cairo_line_to(CAIRO, X, Y + height);
+    cairo_line_to(CAIRO, X, Y);
+    cairo_close_path(CAIRO);
+
+    cairo_fill(CAIRO);
+
+    float scale_factor = 0.35;
+    int scaledX = X + (width - width * scale_factor) / 2;
+    int scaledY = Y + (height - height * scale_factor) / 2;
+    int scaledWidth = width * scale_factor;
+    int scaledHeight = height * scale_factor;
+    double line_width = 1;
+
+    cairo_set_antialias(CAIRO, CAIRO_ANTIALIAS_NONE);
+
+    int box_offset = 2;
+
+    // Shadow underneath
+    if(hovering)
+    {
+        cairo_set_source_rgba(CAIRO, 0, 0, 0, 0.3);
+        cairo_set_line_width(CAIRO, line_width);
+
+        cairo_move_to(CAIRO, scaledX, scaledY);
+        cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY);
+        cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY + scaledHeight);
+        cairo_line_to(CAIRO, scaledX, scaledY + scaledHeight);
+        cairo_line_to(CAIRO, scaledX, scaledY);
+        cairo_close_path(CAIRO);
+
+        cairo_stroke(CAIRO);
+    }
+
+    cairo_set_line_width(CAIRO, line_width);
+
+    if(hovering)
+        cairo_set_source_rgba(CAIRO, col_fg_hover.r, col_fg_hover.g, col_fg_hover.b, std::max(col_fg_hover.a - 0.2, 0.2));
+    else
+        cairo_set_source_rgba(CAIRO, col_fg.r, col_fg.g, col_fg.b, std::max(col_fg.a - 0.2, 0.2));
+    cairo_move_to(CAIRO, scaledX + box_offset, scaledY - box_offset);
+    cairo_line_to(CAIRO, scaledX + scaledWidth + box_offset, scaledY - box_offset);
+    cairo_line_to(CAIRO, scaledX + scaledWidth + box_offset, scaledY + scaledHeight - box_offset);
+    cairo_line_to(CAIRO, scaledX + box_offset, scaledY + scaledHeight - box_offset );
+    cairo_line_to(CAIRO, scaledX + box_offset, scaledY - box_offset);
+    cairo_close_path(CAIRO);
+    cairo_stroke(CAIRO);
+
+    if(hovering)
+        cairo_set_source_rgba(CAIRO, col_fg_hover.r, col_fg_hover.g, col_fg_hover.b, col_fg_hover.a);
+    else
+        cairo_set_source_rgba(CAIRO, col_fg.r, col_fg.g, col_fg.b, col_fg.a);
+    cairo_move_to(CAIRO, scaledX - box_offset, scaledY + box_offset);
+    cairo_line_to(CAIRO, scaledX + scaledWidth - box_offset, scaledY + box_offset);
+    cairo_line_to(CAIRO, scaledX + scaledWidth - box_offset, scaledY + scaledHeight + box_offset);
+    cairo_line_to(CAIRO, scaledX - box_offset, scaledY + scaledHeight + box_offset );
+    cairo_line_to(CAIRO, scaledX - box_offset, scaledY + box_offset);
+    cairo_close_path(CAIRO);
+
+    cairo_stroke(CAIRO); // Stroke the lines with the specified color and line width
+}
+
+
 void CHyprBar::renderBarButtons(const Vector2D& bufferSize, const float scale) {
-    static auto* const PCLOSECOLOR = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.close")->intValue;
-    static auto* const PMAXCOLOR   = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.maximize")->intValue;
+    static auto* const PROUNDING   = &HyprlandAPI::getConfigValue(PHANDLE, "decoration:rounding")->intValue;
+    static auto* const PSPECIALWSCOLOR   = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:col.movetospecialworkspace_bg")->intValue;
     static auto* const PBUTTONSIZE = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprbars:buttons:button_size")->intValue;
 
     const auto         scaledButtonSize = *PBUTTONSIZE * scale;
     const auto         scaledButtonsPad = BUTTONS_PAD * scale;
+    const auto         COORDS           = cursorRelativeToBar();
 
     const auto         CAIROSURFACE = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, bufferSize.x, bufferSize.y);
     const auto         CAIRO        = cairo_create(CAIROSURFACE);
@@ -197,22 +451,88 @@ void CHyprBar::renderBarButtons(const Vector2D& bufferSize, const float scale) {
     // draw buttons for close and max
 
     auto drawButton = [&](Vector2D pos, CColor col) -> void {
-        const int X      = pos.x;
-        const int Y      = pos.y;
-        const int RADIUS = static_cast<int>(std::ceil(scaledButtonSize / 2.0));
+        const int X = pos.x;
+        const int Y = pos.y;
+        const int width = scaledButtonSize;
+        const int height = scaledButtonSize;
 
-        cairo_set_source_rgba(CAIRO, col.r, col.g, col.b, col.a);
-        cairo_arc(CAIRO, X, Y + RADIUS, RADIUS, 0, 2 * M_PI);
+        bool hovering = VECINRECT(COORDS, pos.x, pos.y, pos.x + scaledButtonSize + BUTTONS_PAD, pos.y + scaledButtonSize);
+
+        cairo_set_source_rgba(CAIRO, col.r, col.g, col.b, (hovering) ? col.a : 0);
+
+        cairo_new_sub_path(CAIRO);
+        //cairo_arc(CAIRO, X + width - corner_radius, Y + corner_radius, corner_radius, -M_PI_2, 0); // Top-right corner
+        cairo_move_to(CAIRO, X, Y);
+        cairo_line_to(CAIRO, X + width, Y);
+        cairo_line_to(CAIRO, X + width, Y + height);
+        cairo_line_to(CAIRO, X, Y + height);
+        cairo_line_to(CAIRO, X, Y);
+        cairo_close_path(CAIRO);
+
         cairo_fill(CAIRO);
+
+        // Draw the X
+
+        float scale_factor = 0.3;
+        int scaledX = X + (width - width * scale_factor) / 2;
+        int scaledY = Y + (height - height * scale_factor) / 2;
+        int scaledWidth = width * scale_factor;
+        int scaledHeight = height * scale_factor;
+        double line_width = 1;
+
+        cairo_set_antialias(CAIRO, CAIRO_ANTIALIAS_BEST);
+        int box_offset = 2;
+
+        // Shadow underneath
+        if(hovering)
+        {
+            cairo_set_source_rgba(CAIRO, 0, 0, 0, 0.3);
+            cairo_set_line_width(CAIRO, line_width);
+
+            cairo_move_to(CAIRO, scaledX, scaledY);
+            cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY);
+            cairo_line_to(CAIRO, scaledX + scaledWidth, scaledY + scaledHeight);
+            cairo_line_to(CAIRO, scaledX, scaledY + scaledHeight);
+            cairo_line_to(CAIRO, scaledX, scaledY);
+            cairo_close_path(CAIRO);
+
+            cairo_stroke(CAIRO);
+        }
+
+        cairo_set_source_rgba(CAIRO, 1.0, 1.0, 1.0, (hovering) ? 1 : 0.7);
+        cairo_set_line_width(CAIRO, line_width);
+
+        cairo_move_to(CAIRO, scaledX + box_offset, scaledY - box_offset);
+        cairo_line_to(CAIRO, scaledX + scaledWidth + box_offset, scaledY - box_offset);
+        cairo_line_to(CAIRO, scaledX + scaledWidth + box_offset, scaledY + scaledHeight - box_offset);
+        cairo_move_to(CAIRO, scaledX + box_offset, scaledY + scaledHeight - box_offset );
+        cairo_line_to(CAIRO, scaledX + box_offset, scaledY - box_offset);
+
+
+        cairo_move_to(CAIRO, scaledX - box_offset, scaledY + box_offset);
+        cairo_line_to(CAIRO, scaledX + scaledWidth - box_offset, scaledY + box_offset);
+        cairo_line_to(CAIRO, scaledX + scaledWidth - box_offset, scaledY + scaledHeight + box_offset);
+        cairo_line_to(CAIRO, scaledX - box_offset, scaledY + scaledHeight + box_offset );
+        cairo_line_to(CAIRO, scaledX - box_offset, scaledY + box_offset);
+        cairo_close_path(CAIRO);
+
+        cairo_stroke(CAIRO); // Stroke the lines with the specified color and line width
     };
 
-    Vector2D currentPos = Vector2D{bufferSize.x - scaledButtonsPad - scaledButtonSize, (bufferSize.y - scaledButtonSize) / 2.0}.floor();
+    Vector2D currentPos = Vector2D{bufferSize.x - scaledButtonSize, 0 / 2.0}.floor();
 
-    drawButton(currentPos, CColor(*PCLOSECOLOR));
+    drawCloseButton(CAIRO, currentPos, scaledButtonSize, COORDS);
 
     currentPos.x -= scaledButtonsPad + scaledButtonSize;
 
-    drawButton(currentPos, CColor(*PMAXCOLOR));
+    drawMaximizeButton(CAIRO, currentPos, scaledButtonSize, COORDS);
+
+    currentPos.x -= scaledButtonsPad + scaledButtonSize;
+
+    drawFloatButton(CAIRO, currentPos, scaledButtonSize, COORDS);
+
+    currentPos.x -= scaledButtonsPad + scaledButtonSize;
+    drawButton(currentPos, CColor(*PSPECIALWSCOLOR));
 
     // copy the data to an OpenGL texture we have
     const auto DATA = cairo_image_surface_get_data(CAIROSURFACE);
@@ -289,7 +609,7 @@ void CHyprBar::draw(CMonitor* pMonitor, float a, const Vector2D& offset) {
         glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
     }
 
-    g_pHyprOpenGL->renderRect(&titleBarBox, color, scaledRounding);
+    g_pHyprOpenGL->renderRectWithBlur(&titleBarBox, color, scaledRounding);
 
     // render title
     if (m_szLastTitle != m_pWindow->m_szTitle || m_bWindowSizeChanged || m_tTextTex.m_iTexID == 0) {

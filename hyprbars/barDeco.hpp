@@ -44,6 +44,9 @@ class CHyprBar : public IHyprWindowDecoration {
     void                     renderBarButtons(const Vector2D& bufferSize, const float scale);
     void                     onMouseDown(wlr_pointer_button_event* e);
     void                     onMouseMove(Vector2D coords);
+    void                     drawCloseButton(cairo_t* CAIRO, const Vector2D &pos, int scaledButtonSize, const Vector2D &COORDS);
+    void                     drawMaximizeButton(cairo_t* CAIRO, const Vector2D &pos, int scaledButtonSize, const Vector2D &COORDS);
+    void                     drawFloatButton(cairo_t* CAIRO, const Vector2D &pos, int scaledButtonSize, const Vector2D &COORDS);
 
     HOOK_CALLBACK_FN*        m_pMouseButtonCallback;
     HOOK_CALLBACK_FN*        m_pMouseMoveCallback;
