@@ -11,8 +11,6 @@
     withPkgsFor = fn: nixpkgs.lib.genAttrs (builtins.attrNames hyprland.packages) (system: fn system nixpkgs.legacyPackages.${system});
   in {
     packages = withPkgsFor (system: pkgs: {
-      borders-plus-plus = pkgs.callPackage ./borders-plus-plus {inherit (hyprland.packages.${system}) hyprland;};
-      csgo-vulkan-fix = pkgs.callPackage ./csgo-vulkan-fix {inherit (hyprland.packages.${system}) hyprland;};
       hyprbars = pkgs.callPackage ./hyprbars {inherit (hyprland.packages.${system}) hyprland;};
     });
 
